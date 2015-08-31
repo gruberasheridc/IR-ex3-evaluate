@@ -1,5 +1,15 @@
 package evaluate;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+import org.apache.commons.lang3.tuple.MutablePair;
+
 public class EvaluateSearch {
 
 	public static void main(String[] args) {
@@ -8,6 +18,23 @@ public class EvaluateSearch {
 			return;
 		}
 		
+		Path truthPath = Paths.get("truth.txt");
+		try {
+			List<String> queryDocLines = Files.readAllLines(truthPath);
+			Map<Integer, List<Integer>> queryDocs = queryDocLines.stream()
+				.map (line -> {
+						String[] columns = line.split(" ");
+						Integer queryId = Integer.parseInt(columns[0]);
+						Integer docId = Integer.parseInt(columns[3]);
+						return new MutablePair<Integer, Integer>(queryId, docId);
+					})
+				.collect(Collectors.groupingBy(entry -> entry.getKey(), Collectors.mapping((MutablePair<Integer, Integer> entry) -> entry.getValue(), Collectors.toList())));
+			
+			System.out.println(queryDocs);
+		} catch (IOException e) {
+			// TODO handle catch block
+			e.printStackTrace();
+		}
 	}
 
 }
