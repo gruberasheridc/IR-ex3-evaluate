@@ -21,6 +21,7 @@ public class EvaluateSearch {
 		String truthFile = args[0];
 		String algoOutputFile = args[1];
 		
+		// Read the truth file and create a map from query ID to the list of relevant documents (i.e. Map<Query ID, List<DocID>>).
 		Path truthPath = Paths.get(truthFile);
 		try {
 			List<String> queryDocLines = Files.readAllLines(truthPath);
