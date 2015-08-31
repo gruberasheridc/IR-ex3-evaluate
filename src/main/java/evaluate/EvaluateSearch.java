@@ -18,7 +18,10 @@ public class EvaluateSearch {
 			return;
 		}
 		
-		Path truthPath = Paths.get("truth.txt");
+		String truthFile = args[0];
+		String algoOutputFile = args[1];
+		
+		Path truthPath = Paths.get(truthFile);
 		try {
 			List<String> queryDocLines = Files.readAllLines(truthPath);
 			Map<Integer, List<Integer>> queryDocs = queryDocLines.stream()
