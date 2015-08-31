@@ -29,7 +29,7 @@ public class EvaluateSearch {
 				.map (line -> {
 						String[] columns = line.split(" ");
 						Integer queryId = Integer.parseInt(columns[0]);
-						Integer docId = Integer.parseInt(columns[3]);
+						Integer docId = Integer.parseInt(columns[2]);
 						return new MutablePair<Integer, Integer>(queryId, docId);
 					})
 				.collect(Collectors.groupingBy(entry -> entry.getKey(), Collectors.mapping((MutablePair<Integer, Integer> entry) -> entry.getValue(), Collectors.toList())));
