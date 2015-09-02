@@ -4,8 +4,11 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.stream.Collectors;
 
 import org.apache.commons.lang3.tuple.ImmutablePair;
@@ -25,8 +28,8 @@ public class EvaluateSearch {
 				
 		// Read the truth file and create a map from query ID to the list of relevant documents (i.e. Map<Query ID, List<DocID>>).
 		String truthFile = args[0];
-		Map<Integer, List<Integer>> queryDocs = createQueryDocsTruthMap(truthFile);
-		if (queryDocs == null) {
+		Map<Integer, List<Integer>> truthQueryDocs = createQueryDocsTruthMap(truthFile);
+		if (truthQueryDocs == null) {
             System.out.println("Faild to process the truth file: " + truthFile + ".");
 		}
 		
@@ -37,6 +40,68 @@ public class EvaluateSearch {
             System.out.println("Faild to process the search algorithm output file: " + algoOutputFile + ".");
             return;
 		}
+		
+		Map<Integer, Float> queryPrecisionAt5 = calcPrecisionAtK(truthQueryDocs, queryDocsWithRanks, 5);
+		Map<Integer, Float> queryPrecisionAt10 = calcPrecisionAtK(truthQueryDocs, queryDocsWithRanks, 10);		
+		System.out.println("After query precision calc");
+	}
+
+	/**
+	 * The method calculates the Precision at K of the query set given to the algorithm.
+	 * @param truthQueryDocs a map from query ID to the list of truth documents.
+	 * @param queyDocRank a map from query ID to the list of relevant document, rank pairs (output from the algorithm).
+	 * @param k the k for whom to perform the precision at K calculation.
+	 * @return a map of query ID to precision at K of all the queries in the query set.
+	 */
+	private static Map<Integer, Float> calcPrecisionAtK(Map<Integer, List<Integer>> truthQueryDocs,
+			Map<Integer, List<ImmutablePair<Integer, Integer>>> queryDocsWithRanks, int k) {		
+		Map<Integer, Float> queryPrecisionAtK = new HashMap<>();
+		queryDocsWithRanks.entrySet().stream()
+			.sorted(Map.Entry.comparingByKey())
+			.forEach(queyDocRank -> 
+				{
+					Integer queryID = queyDocRank.getKey();
+					float precisionAtK = calcQueryPrecisionAtK(truthQueryDocs, queyDocRank, k);
+					queryPrecisionAtK.put(queryID, precisionAtK);
+				}
+			);
+		
+		return queryPrecisionAtK;
+	}
+
+	/**
+	 * The method calculates the Precision at K of a given query.
+	 * @param truthQueryDocs a map from query ID to the list of truth documents.
+	 * @param queyDocRank a map from query ID to the list of relevant document, rank pairs (output from the algorithm).
+	 * @param k the k for whom to perform the precision at K calculation.
+	 * @return the precision at K of the given query.
+	 */
+	private static float calcQueryPrecisionAtK(Map<Integer, List<Integer>> truthQueryDocs, Entry<Integer, List<ImmutablePair<Integer, Integer>>> queyDocRank, int k) {
+		
+		// Take the query's top k documents which are already sorted. If we have less then k documents take the actual amount.
+		List<ImmutablePair<Integer, Integer>> docksWithRank = queyDocRank.getValue();
+		int topDocIdx = 0;
+		int lastDocIdx = Math.min(docksWithRank.size(), k);
+		List<ImmutablePair<Integer, Integer>> docsTopK = docksWithRank.subList(topDocIdx, lastDocIdx);
+		
+		// Take the truth documents of the query.
+		int matchingDocsCount = 0;
+		Integer queryID = queyDocRank.getKey();
+		List<Integer> queryTruthDocs = truthQueryDocs.get(queryID);
+		
+		// Calculate the number of documents which exist in the truth query documents list.
+		if (queryTruthDocs != null) {
+			// We have truth documents for the query.
+			for (ImmutablePair<Integer, Integer> docRank : docsTopK) {
+				Integer docID = docRank.getLeft();
+				if (queryTruthDocs.contains(docID)) {
+					matchingDocsCount++;
+				}
+			}
+		}
+		
+		float precisionAtK = matchingDocsCount / k;
+		return precisionAtK;
 	}
 
 	/**
@@ -55,7 +120,7 @@ public class EvaluateSearch {
 						Integer queryId = Integer.parseInt(columns[0].replace(QUERY_PREFIX, "")); // Extract the query ID for text format.
 						
 						// Extract the document ID form text in case it is a real document. Otherwise keep docId = null. 
-						Integer docId = null;
+						Integer docId = -1;
 						String doc = columns[1];
 						if (doc.startsWith(DOCUMENT_PREFIX)) {
 							docId = Integer.parseInt(doc.replace(DOCUMENT_PREFIX, "")); 
