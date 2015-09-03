@@ -4,13 +4,17 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.OptionalDouble;
 import java.util.stream.Collectors;
 
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.ImmutableTriple;
 
@@ -42,8 +46,80 @@ public class EvaluateSearch {
 		}
 		
 		Map<Integer, Float> queryPrecisionAt5 = calcPrecisionAtK(truthQueryDocs, queryDocsWithRanks, 5);
-		Map<Integer, Float> queryPrecisionAt10 = calcPrecisionAtK(truthQueryDocs, queryDocsWithRanks, 10);		
-		System.out.println("After query precision calc");
+		Map<Integer, Float> queryPrecisionAt10 = calcPrecisionAtK(truthQueryDocs, queryDocsWithRanks, 10);
+		Map<Integer, Float> queryAvgPrecisionAt5 = calcAvgPrecisionAtK(truthQueryDocs, queryDocsWithRanks, 5);		
+		Map<Integer, Float> queryAvgPrecisionAt10 = calcAvgPrecisionAtK(truthQueryDocs, queryDocsWithRanks, 10);
+		float mapAt5 = calcMAPAtK(queryAvgPrecisionAt5);
+		System.out.println("MAP@5: " + mapAt5 + ".");
+		float mapAt10 = calcMAPAtK(queryAvgPrecisionAt10);
+		System.out.println("MAP@10: " + mapAt10 + ".");
+	}
+
+	/**
+	 * The method calculates the Mean Average Precision of the given queries information.
+	 * @param queryAvgPrecisionAtk a map of query ID to Average Precision at K of all the queries in the query set.
+	 * @return MAP of the given queries.
+	 */
+	private static float calcMAPAtK(Map<Integer, Float> queryAvgPrecisionAtk) {
+		float mapAtK = 0;
+		if (MapUtils.isNotEmpty(queryAvgPrecisionAtk)) {
+			OptionalDouble mapAtKResult = queryAvgPrecisionAtk.values().stream().mapToDouble(v -> v).average();
+			mapAtK = (float) mapAtKResult.getAsDouble();
+		}
+		
+		return mapAtK;
+	}
+
+	/**
+	 * The method calculates the Average Precision at K of the query set given to the algorithm.
+	 * @param truthQueryDocs a map from query ID to the list of truth documents.
+	 * @param queyDocRank a map from query ID to the list of relevant document, rank pairs (output from the algorithm).
+	 * @param k the k for whom to perform the Average Precision at K calculation.
+	 * @return a map of query ID to Average Precision at K of all the queries in the query set.
+	 */
+	private static Map<Integer, Float> calcAvgPrecisionAtK(Map<Integer, List<Integer>> truthQueryDocs, Map<Integer, 
+			List<ImmutablePair<Integer, Integer>>> queryDocsWithRanks, int k) {
+		Map<Integer, Float> queryPrecisionAtK = new HashMap<>();
+		queryDocsWithRanks.entrySet().stream()
+			.sorted(Map.Entry.comparingByKey())
+			.forEach(queyDocRank -> 
+				{
+					// Calculate the Average Precision at K of the query ID.
+					Integer queryID = queyDocRank.getKey();
+					float avgPrecisionAtK = calcQueryAvgPrecisionAtK(truthQueryDocs, queyDocRank, k);
+					queryPrecisionAtK.put(queryID, avgPrecisionAtK);
+				}
+			);
+		
+		return queryPrecisionAtK;
+	}
+
+	
+	/**
+	 * The method calculates the Average Precision at K of a given query.
+	 * @param truthQueryDocs a map from query ID to the list of truth documents.
+	 * @param queyDocRank a map from query ID to the list of relevant document, rank pairs (output from the algorithm).
+	 * @param k the k for whom to perform the Average Precision at K calculation.
+	 * @return the Average Precision at K of the given query.
+	 */
+	private static float calcQueryAvgPrecisionAtK(Map<Integer, List<Integer>> truthQueryDocs, Entry<Integer, List<ImmutablePair<Integer, Integer>>> queyDocRank, int k) {
+		float avgPrecisionAtK = 0;
+		
+		List<ImmutableTriple<Integer, Integer, Integer>> docHitsInfo = getDocsMatchInfoAtK(truthQueryDocs, queyDocRank, k);
+		if (CollectionUtils.isNotEmpty(docHitsInfo)) {
+			int matchDocRelationSum = 0;
+			for (ImmutableTriple<Integer, Integer, Integer> docHitInfo : docHitsInfo) {
+				//List<ImmutableTriple<DocID, Doc location, matchingDocsCount>>
+				int hitsUntilDoc = docHitInfo.getRight(); // The number of doc hits until the current doc (including the doc).
+				int docLocation = docHitInfo.getMiddle(); // The document location from the top (top = 1).
+				matchDocRelationSum += (hitsUntilDoc / docLocation);
+			}
+			
+			int docHitsCount = docHitsInfo.size();
+			avgPrecisionAtK = matchDocRelationSum / docHitsCount; 
+		}
+		
+		return avgPrecisionAtK;
 	}
 
 	/**
@@ -70,14 +146,14 @@ public class EvaluateSearch {
 	}
 
 	/**
-	 * The method calculates the Precision at K of a given query.
+	 * The method calculates the documents match information for the top K ranked documents of a given query.
 	 * @param truthQueryDocs a map from query ID to the list of truth documents.
 	 * @param queyDocRank a map from query ID to the list of relevant document, rank pairs (output from the algorithm).
-	 * @param k the k for whom to perform the precision at K calculation.
-	 * @return the precision at K of the given query.
+	 * @param k the K for whom to calculate the documents match information.
+	 * @return the documents which exist in the truth query documents list and the counts matches until there location (i.e. List<ImmutableTriple<DocID, Doc location, matchingDocsCount>>)
 	 */
-	private static float calcQueryPrecisionAtK(Map<Integer, List<Integer>> truthQueryDocs, Entry<Integer, List<ImmutablePair<Integer, Integer>>> queyDocRank, int k) {
-		
+	private static List<ImmutableTriple<Integer,Integer,Integer>> getDocsMatchInfoAtK(Map<Integer, List<Integer>> truthQueryDocs,
+			Entry<Integer, List<ImmutablePair<Integer, Integer>>> queyDocRank, int k) {
 		// Take the query's top k documents which are already sorted. If we have less then k documents take the actual amount.
 		List<ImmutablePair<Integer, Integer>> docksWithRank = queyDocRank.getValue();
 		int topDocIdx = 0;
@@ -85,21 +161,42 @@ public class EvaluateSearch {
 		List<ImmutablePair<Integer, Integer>> docsTopK = docksWithRank.subList(topDocIdx, lastDocIdx);
 		
 		// Take the truth documents of the query.
-		int matchingDocsCount = 0;
 		Integer queryID = queyDocRank.getKey();
 		List<Integer> queryTruthDocs = truthQueryDocs.get(queryID);
 		
-		// Calculate the number of documents which exist in the truth query documents list.
+		// Finds the documents which exist in the truth query documents list and counts matches until 
+		// there location (i.e. List<ImmutableTriple<DocID, Doc location, matchingDocsCount>>).
+		List<ImmutableTriple<Integer, Integer, Integer>> docHitWithMatchUntil = new ArrayList<>();
 		if (queryTruthDocs != null) {
 			// We have truth documents for the query.
+			int matchingDocsCount = 0;
+			int docIdx = 1;
 			for (ImmutablePair<Integer, Integer> docRank : docsTopK) {
 				Integer docID = docRank.getLeft();
 				if (queryTruthDocs.contains(docID)) {
+					// Document match.
 					matchingDocsCount++;
+					ImmutableTriple<Integer, Integer, Integer> docMatchInfo = new ImmutableTriple<Integer, Integer, Integer>(docID, docIdx, matchingDocsCount);
+					docHitWithMatchUntil.add(docMatchInfo);
 				}
+				
+				docIdx++;
 			}
 		}
 		
+		return docHitWithMatchUntil;
+	}
+
+	/**
+	 * The method calculates the Precision at K of a given query.
+	 * @param truthQueryDocs a map from query ID to the list of truth documents.
+	 * @param queyDocRank a map from query ID to the list of relevant document, rank pairs (output from the algorithm).
+	 * @param k the k for whom to perform the precision at K calculation.
+	 * @return the precision at K of the given query.
+	 */
+	private static float calcQueryPrecisionAtK(Map<Integer, List<Integer>> truthQueryDocs, Entry<Integer, List<ImmutablePair<Integer, Integer>>> queyDocRank, int k) {
+		List<ImmutableTriple<Integer, Integer, Integer>> docHitInfo = getDocsMatchInfoAtK(truthQueryDocs, queyDocRank, k);
+		int matchingDocsCount = CollectionUtils.isNotEmpty(docHitInfo) ? docHitInfo.size() : 0; 
 		float precisionAtK = matchingDocsCount / k;
 		return precisionAtK;
 	}
