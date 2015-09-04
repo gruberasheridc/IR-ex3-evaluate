@@ -107,12 +107,12 @@ public class EvaluateSearch {
 		
 		List<ImmutableTriple<Integer, Integer, Integer>> docHitsInfo = getDocsMatchInfoAtK(truthQueryDocs, queyDocRank, k);
 		if (CollectionUtils.isNotEmpty(docHitsInfo)) {
-			int matchDocRelationSum = 0;
+			float matchDocRelationSum = 0;
 			for (ImmutableTriple<Integer, Integer, Integer> docHitInfo : docHitsInfo) {
 				//List<ImmutableTriple<DocID, Doc location, matchingDocsCount>>
 				int hitsUntilDoc = docHitInfo.getRight(); // The number of doc hits until the current doc (including the doc).
 				int docLocation = docHitInfo.getMiddle(); // The document location from the top (top = 1).
-				matchDocRelationSum += (hitsUntilDoc / docLocation);
+				matchDocRelationSum += ((float)hitsUntilDoc / docLocation);
 			}
 			
 			int docHitsCount = docHitsInfo.size();
@@ -197,7 +197,7 @@ public class EvaluateSearch {
 	private static float calcQueryPrecisionAtK(Map<Integer, List<Integer>> truthQueryDocs, Entry<Integer, List<ImmutablePair<Integer, Integer>>> queyDocRank, int k) {
 		List<ImmutableTriple<Integer, Integer, Integer>> docHitInfo = getDocsMatchInfoAtK(truthQueryDocs, queyDocRank, k);
 		int matchingDocsCount = CollectionUtils.isNotEmpty(docHitInfo) ? docHitInfo.size() : 0; 
-		float precisionAtK = matchingDocsCount / k;
+		float precisionAtK =  (float)matchingDocsCount / k;
 		return precisionAtK;
 	}
 
