@@ -20,13 +20,15 @@ import org.apache.commons.lang3.tuple.ImmutableTriple;
 
 public class EvaluateSearch {
 	
+	private static final String TAB = "\t";
+	private static final String NEW_LINE = System.lineSeparator(); 
 	private static final String QUERY_PREFIX = "q";
 	private static final String DOCUMENT_PREFIX = "doc";
 	private static final String DUMMAY_PREFIX = "dummy";
 
 	public static void main(String[] args) {
-		if (args.length != 2) {
-			System.out.println("Must accept two parameter: (1) Search output file. (2) truth.txt.");
+		if (args.length != 3) {
+			System.out.println("Must accept 3 parameter: (1) Search output file. (2) truth.txt. (3) Report output file.");
 			return;
 		}
 				
@@ -53,6 +55,59 @@ public class EvaluateSearch {
 		System.out.println("MAP@5: " + mapAt5 + ".");
 		float mapAt10 = calcMAPAtK(queryAvgPrecisionAt10);
 		System.out.println("MAP@10: " + mapAt10 + ".");
+		
+		List<String> report = generateReport(queryDocsWithRanks, queryPrecisionAt5, queryPrecisionAt10, 
+				queryAvgPrecisionAt5,queryAvgPrecisionAt10, mapAt5, mapAt10);
+		
+		String reportFile = args[2];
+		Path outputPath = Paths.get(reportFile);
+		try {
+			Files.write(outputPath, report);
+		} catch (IOException e) {
+			// TODO handle catch block
+			e.printStackTrace();
+		}
+	}
+	
+	/**
+	 * The method generates a summary report of the algorithm output results.
+	 * @param queryDocsWithRanks a map from query ID to the list of relevant document, rank pairs.
+	 * @param queryPrecisionAt5 a map of query ID to precision at 5 of all the queries in the query set.
+	 * @param queryPrecisionAt10 a map of query ID to precision at 10 of all the queries in the query set.
+	 * @param queryAvgPrecisionAt5 a map of query ID to Average Precision at 5 of all the queries in the query set.
+	 * @param queryAvgPrecisionAt10 a map of query ID to Average Precision at 10 of all the queries in the query set.
+	 * @param mapAt5 MAP@5 of all the queries in the query set.
+	 * @param mapAt10 MAP@10 of all the queries in the query set.
+	 * @return tab delimited report summary lines.
+	 */
+	private static List<String> generateReport(Map<Integer, List<ImmutablePair<Integer, Integer>>> queryDocsWithRanks,
+			Map<Integer, Float> queryPrecisionAt5, Map<Integer, Float> queryPrecisionAt10,
+			Map<Integer, Float> queryAvgPrecisionAt5, Map<Integer, Float> queryAvgPrecisionAt10, float mapAt5, 
+			float mapAt10) {
+		String reportCol = "Query ID" + TAB + "prec@5" + TAB + "prec@10" + TAB + "avgPrec@5" + TAB + "avgPrec@10";
+		List<String> reportRows = new ArrayList<String>();
+		queryDocsWithRanks.entrySet().stream()
+		.sorted(Map.Entry.comparingByKey())
+		.forEach(queyDocRank -> 
+			{
+				Integer queryID = queyDocRank.getKey();
+				Float precAt5 = queryPrecisionAt5.get(queryID);
+				Float precAt10 = queryPrecisionAt10.get(queryID);
+				Float avgPrecAt5 = queryAvgPrecisionAt5.get(queryID);
+				Float avgPrecAt10 = queryAvgPrecisionAt10.get(queryID);
+				String outputRow = queryID + TAB + precAt5 + TAB + precAt10 + TAB + avgPrecAt5 + TAB + avgPrecAt10;
+				reportRows.add(outputRow);
+			}
+		);
+		
+		List<String> report = new ArrayList<>();
+		report.add(reportCol);
+		report.addAll(reportRows);
+		report.add(NEW_LINE);
+		report.add("MAP@5" + TAB + mapAt5);
+		report.add("MAP@10" + TAB + mapAt10);
+		
+		return report;
 	}
 
 	/**
