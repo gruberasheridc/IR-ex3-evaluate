@@ -28,7 +28,7 @@ public class EvaluateSearch {
 
 	public static void main(String[] args) {
 		if (args.length != 3) {
-			System.out.println("Must accept 3 parameter: (1) Search output file. (2) truth.txt. (3) Report output file.");
+			System.out.println("Must accept 3 parameter: (1) truth.txt. (2) Search output file. (3) Report output file.");
 			return;
 		}
 				
