@@ -1,3 +1,5 @@
 /target/
 truth.txt
 output.txt
+output_title_only.txt
+output_text_only.txt
