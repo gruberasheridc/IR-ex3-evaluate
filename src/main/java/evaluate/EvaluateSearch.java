@@ -64,8 +64,7 @@ public class EvaluateSearch {
 		try {
 			Files.write(outputPath, report);
 		} catch (IOException e) {
-			// TODO handle catch block
-			e.printStackTrace();
+			System.out.println("Faild to write Report output file name: " + reportFile + ".");
 		}
 	}
 	
